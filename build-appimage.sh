@@ -103,8 +103,14 @@ if should_bundle; then
     download_tool \
         "https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/master/linuxdeploy-plugin-gtk.sh" \
         "$GTK_PLUGIN"
-    # linuxdeploy looks for plugins next to itself or on PATH.
-    ln -sfn "$GTK_PLUGIN" "$TOOLS/linuxdeploy-plugin-gtk.sh"
+    # linuxdeploy looks for plugins next to itself or on PATH. The default
+    # download already lands the plugin next to linuxdeploy in $TOOLS; only
+    # link when GTK_PLUGIN was overridden to another path.
+    if [ "$(readlink -f "$GTK_PLUGIN")" != "$(readlink -f "$TOOLS/linuxdeploy-plugin-gtk.sh")" ]; then
+        ln -sfn "$GTK_PLUGIN" "$TOOLS/linuxdeploy-plugin-gtk.sh"
+    fi
+    PATH="$TOOLS:$PATH"
+    export PATH
 
     # Collect libraries from python, _gi*.so and libgtk so the GTK plugin
     # has something to work with (python itself is not linked to GTK).

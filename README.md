@@ -17,7 +17,7 @@ leaving out code blocks, commands, file paths and tool output.
 
 ```sh
 ./build-deb.sh
-sudo apt install ./dist-deb/cursor-speak_0.1.2_all.deb
+sudo apt install ./dist-deb/cursor-speak_0.1.3_all.deb
 ```
 
 Then start **Cursor Speak** from the app menu (or run `cursor-speak`). A small
