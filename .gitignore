@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+build/
+dist-deb/
+*.deb
+venv/
+.venv/
+*.onnx
+*.onnx.json
+*.wav

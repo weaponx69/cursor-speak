@@ -1,0 +1,4 @@
+#!/bin/sh
+# Run straight from a source checkout (no install). Usage: bin/cursor-speak-dev [args]
+here="$(cd "$(dirname "$0")/.." && pwd)"
+PYTHONPATH="$here/src${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m cursor_speak "$@"

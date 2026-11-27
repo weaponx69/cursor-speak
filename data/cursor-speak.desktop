@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Cursor Speak
+GenericName=Cursor reply reader
+Comment=Reads new Cursor CLI replies out loud
+Exec=cursor-speak
+Icon=cursor-speak
+Terminal=false
+Categories=Utility;Accessibility;
+Keywords=cursor;tts;speech;voice;read aloud;
+StartupNotify=false

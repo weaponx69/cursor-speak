@@ -1,0 +1,19 @@
+Package: cursor-speak
+Version: @VERSION@
+Section: utils
+Priority: optional
+Architecture: all
+Maintainer: Brian Perry <perry.brian@gmail.com>
+Installed-Size: @SIZE@
+Depends: python3 (>= 3.10), python3-gi, gir1.2-gtk-3.0, gir1.2-ayatanaappindicator3-0.1, python3-venv, speech-dispatcher | espeak-ng, pipewire-bin | pulseaudio-utils | alsa-utils
+Recommends: libnotify-bin
+Description: Reads new Cursor CLI replies out loud
+ Cursor Speak sits in the system tray, watches your Cursor CLI (cursor-agent)
+ chats, and reads each finished reply out loud. Code blocks, commands, file
+ paths and tool output are left out; headings and bullets are read as plain
+ sentences.
+ .
+ Voice: a local piper neural voice, downloaded per user on first run into
+ ~/.local/share/cursor-speak (about 80 MB, nothing is bundled in this package),
+ with espeak-ng or speech-dispatcher as a fallback. Chat files are only ever
+ opened read-only.
