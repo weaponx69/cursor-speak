@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import shutil
 import time
 from pathlib import Path
 
@@ -26,10 +28,33 @@ from . import APP_ID, autostart  # noqa: E402
 log = logging.getLogger("cursor-speak.tray")
 
 
+def _install_user_icons(src_root: Path) -> str | None:
+    """AppImage: copy icons into ~/.local/share/icons so the shell can read them
+    (the AppImage mount disappears when the app quits)."""
+    dest = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "icons"
+    src = src_root / "hicolor" / "scalable" / "apps"
+    if not src.is_dir():
+        return None
+    for svg in src.glob("cursor-speak*.svg"):
+        target = dest / "hicolor" / "scalable" / "apps" / svg.name
+        try:
+            if not target.exists() or target.read_bytes() != svg.read_bytes():
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(svg, target)
+        except OSError:
+            log.warning("could not install icon %s", target)
+    return str(dest)
+
+
 def _icon_dir() -> str | None:
-    """Theme path for running from a source checkout (the .deb uses /usr/share/icons)."""
+    """Icon theme path when the icon isn't in the system theme (AppImage, source tree)."""
     if Path("/usr/share/icons/hicolor/scalable/apps/cursor-speak.svg").exists():
         return None
+    appdir = os.environ.get("APPDIR")
+    if appdir:
+        found = _install_user_icons(Path(appdir) / "usr" / "share" / "icons")
+        if found:
+            return found
     here = Path(__file__).resolve().parent
     for cand in (here.parent.parent / "data" / "icons", here / "icons"):
         if (cand / "hicolor" / "scalable" / "apps" / "cursor-speak.svg").exists():

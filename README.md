@@ -29,6 +29,35 @@ contains only the app.
 `apt` pulls in `python3-gi`, `gir1.2-ayatanaappindicator3-0.1`, `python3-venv`,
 and a sound player, plus `speech-dispatcher` or `espeak-ng`.
 
+## Install (AppImage, any distro)
+
+Download `Cursor_Speak-<version>-x86_64.AppImage` from the
+[releases page](https://github.com/weaponx69/cursor-speak/releases), then:
+
+```sh
+chmod +x Cursor_Speak-*-x86_64.AppImage
+./Cursor_Speak-*-x86_64.AppImage
+```
+
+It updates in place with AppImageUpdate or any tool that reads the embedded zsync
+info. Turn on **Start at login** from the tray menu to have it launch this AppImage
+at login (turn it off and on again if you move the file).
+
+The AppImage is about 1 MB because it uses your system's Python and GTK rather than
+bundling them. It needs these on the host (all standard on GNOME desktops):
+
+| need | Debian / Ubuntu package | Fedora |
+| --- | --- | --- |
+| Python 3 (tested on 3.14) | `python3` | `python3` |
+| PyGObject and GTK 3 | `python3-gi gir1.2-gtk-3.0` | `python3-gobject gtk3` |
+| tray icon (optional; a window is shown without it) | `gir1.2-ayatanaappindicator3-0.1` | `libayatana-appindicator-gtk3` |
+| first-run voice setup | `python3-venv` | included in `python3` |
+| audio player | `pipewire-bin` or `alsa-utils` | `pipewire-utils` or `alsa-utils` |
+| fallback voice (optional) | `espeak-ng` or `speech-dispatcher` | `espeak-ng` |
+| running AppImages | `libfuse2t64` or FUSE 3 | `fuse` |
+
+Without FUSE: `./Cursor_Speak-*.AppImage --appimage-extract-and-run`.
+
 ### Tray icon on GNOME
 
 Ubuntu ships the *AppIndicator and KStatusNotifierItem Support* extension, which
@@ -109,8 +138,33 @@ python3 -m unittest discover -s tests
 ./build-deb.sh
 ```
 
-Layout: `src/cursor_speak/` (app), `data/` (desktop files, icons), `packaging/DEBIAN/`
-(control and maintainer scripts), `build-deb.sh`.
+Layout: `src/cursor_speak/` (app), `data/` (desktop file, AppStream metadata, icons),
+`packaging/DEBIAN/` (control and maintainer scripts), `packaging/appimage/AppRun`,
+`build-deb.sh`, `build-appimage.sh`, `.github/workflows/release.yml`.
+
+### Build the AppImage
+
+```sh
+./build-appimage.sh      # -> dist-appimage/Cursor_Speak-<version>-x86_64.AppImage (+ .zsync)
+```
+
+Downloads `appimagetool` into `build/tools` the first time, and validates the desktop
+file and the AppStream metadata (`appstreamcli validate`) before building. Set
+`VALIDATE_URLS=1` to also check that the URLs in the metadata resolve.
+
+## Release
+
+Bump `__version__` in `src/cursor_speak/__init__.py` and add a `<release>` entry to
+`data/io.github.weaponx69.CursorSpeak.appdata.xml`, then:
+
+```sh
+git tag v0.1.2 && git push origin v0.1.2
+```
+
+The `release` workflow builds the `.deb` and the AppImage and attaches them (plus
+`SHA256SUMS` and the `.zsync` file) to a GitHub release. To list the AppImage on
+[AppImageHub](https://appimage.github.io), open a pull request there that adds
+`data/cursor-speak` with the repository URL once a release exists.
 
 ## License
 

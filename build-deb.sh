@@ -21,7 +21,9 @@ PYTHONPATH="/usr/lib/cursor-speak${PYTHONPATH:+:$PYTHONPATH}" exec /usr/bin/pyth
 LAUNCH
 chmod 755 "$STAGE/usr/bin/cursor-speak"
 
-install -m 644 data/cursor-speak.desktop "$STAGE/usr/share/applications/cursor-speak.desktop"
+install -m 644 data/io.github.weaponx69.CursorSpeak.desktop "$STAGE/usr/share/applications/io.github.weaponx69.CursorSpeak.desktop"
+install -D -m 644 data/io.github.weaponx69.CursorSpeak.appdata.xml "$STAGE/usr/share/metainfo/io.github.weaponx69.CursorSpeak.appdata.xml"
+install -D -m 644 data/icons/hicolor/256x256/apps/cursor-speak.png "$STAGE/usr/share/icons/hicolor/256x256/apps/cursor-speak.png"
 install -m 644 data/cursor-speak-autostart.desktop "$STAGE/etc/xdg/autostart/cursor-speak.desktop"
 install -m 644 data/icons/hicolor/scalable/apps/*.svg "$STAGE/usr/share/icons/hicolor/scalable/apps/"
 install -m 644 README.md "$STAGE/usr/share/doc/cursor-speak/README.md"

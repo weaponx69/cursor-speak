@@ -8,3 +8,7 @@ venv/
 *.onnx
 *.onnx.json
 *.wav
+dist-appimage/
+*.AppImage
+*.AppImage.zsync
+release/

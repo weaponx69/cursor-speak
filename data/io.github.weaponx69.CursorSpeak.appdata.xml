@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.weaponx69.CursorSpeak</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>Cursor Speak</name>
+  <summary>Reads new Cursor CLI replies out loud</summary>
+  <developer id="io.github.weaponx69">
+    <name>Brian Perry</name>
+  </developer>
+  <description>
+    <p>
+      Cursor Speak sits in the system tray, watches your Cursor CLI (cursor-agent)
+      chats, and reads each finished reply out loud. Code blocks, commands, file
+      paths and tool output are left out, and headings and bullets are read as
+      plain sentences.
+    </p>
+    <ul>
+      <li>Reads only the final reply of each turn, never in-progress text</li>
+      <li>Watches every chat, so a new session works without any setup</li>
+      <li>Never speaks old replies when it starts</li>
+      <li>Opens chat files read-only and never touches the Cursor process</li>
+      <li>Local neural voice (piper), downloaded on first run, with espeak-ng as a fallback</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">io.github.weaponx69.CursorSpeak.desktop</launchable>
+  <url type="homepage">https://github.com/weaponx69/cursor-speak</url>
+  <url type="bugtracker">https://github.com/weaponx69/cursor-speak/issues</url>
+  <provides>
+    <binary>cursor-speak</binary>
+  </provides>
+  <categories>
+    <category>Utility</category>
+    <category>Accessibility</category>
+  </categories>
+  <keywords>
+    <keyword>cursor</keyword>
+    <keyword>text to speech</keyword>
+    <keyword>read aloud</keyword>
+  </keywords>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.1" date="2026-11-27">
+      <description>
+        <p>Adds an AppImage build and an AppStream description.</p>
+      </description>
+    </release>
+    <release version="0.1.0" date="2026-11-27">
+      <description>
+        <p>First release.</p>
+      </description>
+    </release>
+  </releases>
+</component>

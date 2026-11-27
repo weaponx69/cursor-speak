@@ -1,0 +1,16 @@
+#!/bin/sh
+# AppImage entry point. The app is pure Python; it runs on the host's python3 with
+# PyGObject (GTK 3 + AppIndicator typelibs) from the host. See README for the list.
+HERE="$(dirname "$(readlink -f "$0")")"
+export APPDIR="${APPDIR:-$HERE}"
+
+if ! command -v python3 >/dev/null 2>&1; then
+    msg="Cursor Speak needs Python 3 and PyGObject. On Debian/Ubuntu: sudo apt install python3 python3-gi gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1 python3-venv"
+    echo "$msg" >&2
+    command -v notify-send >/dev/null 2>&1 && notify-send "Cursor Speak" "$msg"
+    exit 1
+fi
+
+export PYTHONPATH="$HERE/usr/lib/cursor-speak${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONDONTWRITEBYTECODE=1
+exec python3 -m cursor_speak "$@"

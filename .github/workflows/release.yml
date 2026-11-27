@@ -1,0 +1,67 @@
+name: release
+
+# Push a tag like v0.1.1 to build the .deb and the AppImage and attach them to a
+# GitHub release. The tag must match __version__ in src/cursor_speak/__init__.py.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            appstream desktop-file-utils zsync python3-gi gir1.2-gtk-3.0 libfuse2t64
+
+      - name: Check the tag matches the version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version="$(sed -n 's/^__version__ = "\(.*\)"/\1/p' src/cursor_speak/__init__.py)"
+          test "v$version" = "$GITHUB_REF_NAME" || {
+            echo "Tag $GITHUB_REF_NAME does not match version $version" >&2; exit 1; }
+
+      - name: Run tests
+        run: python3 -m unittest discover -s tests
+
+      - name: Build .deb
+        run: ./build-deb.sh
+
+      - name: Build AppImage
+        run: ./build-appimage.sh
+
+      - name: Check AppStream URLs (informational)
+        continue-on-error: true
+        run: appstreamcli validate build/AppDir/usr/share/metainfo/io.github.weaponx69.CursorSpeak.appdata.xml
+
+      - name: Smoke-test the AppImage
+        run: |
+          chmod +x dist-appimage/*.AppImage
+          APPIMAGE_EXTRACT_AND_RUN=1 ./dist-appimage/Cursor_Speak-*-x86_64.AppImage --version
+
+      - name: Checksums
+        run: |
+          mkdir -p release
+          cp dist-deb/*.deb dist-appimage/*.AppImage dist-appimage/*.AppImage.zsync release/
+          cd release && sha256sum * > SHA256SUMS
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cursor-speak-packages
+          path: release/*
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
