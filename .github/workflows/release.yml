@@ -1,7 +1,8 @@
-name: release
-
-# Push a tag like v0.1.1 to build the .deb and the AppImage and attach them to a
-# GitHub release. The tag must match __version__ in src/cursor_speak/__init__.py.
+# Build the .deb and a self-contained AppImage and attach them to the GitHub
+# release. The tag must match __version__ in src/cursor_speak/__init__.py.
+#
+# Ubuntu 22.04 is the build base so the bundled glibc is old enough for the
+# AppImageHub test image (and any later distro).
 on:
   push:
     tags:
@@ -13,7 +14,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
@@ -21,7 +22,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            appstream desktop-file-utils zsync python3-gi gir1.2-gtk-3.0 libfuse2t64
+            appstream desktop-file-utils zsync patchelf file libfuse2 \
+            python3-gi python3-gi-cairo \
+            gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1 \
+            libgtk-3-dev libgirepository1.0-dev librsvg2-dev pkg-config \
+            xvfb x11-utils dbus-x11
 
       - name: Check the tag matches the version
         if: startsWith(github.ref, 'refs/tags/v')
@@ -47,6 +52,9 @@ jobs:
         run: |
           chmod +x dist-appimage/*.AppImage
           APPIMAGE_EXTRACT_AND_RUN=1 ./dist-appimage/Cursor_Speak-*-x86_64.AppImage --version
+          # A visible main window is required by AppImageHub (error-no-window).
+          xvfb-run -a -s "-screen 0 1024x768x24" dbus-run-session -- \
+            ./packaging/appimage/smoke-window.sh ./dist-appimage/Cursor_Speak-*-x86_64.AppImage
 
       - name: Checksums
         run: |

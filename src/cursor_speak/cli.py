@@ -47,7 +47,6 @@ def _run(args) -> int:
     ctl = Controller(cfg)
     server = control.Server(ctl)
     server.start()
-    ctl.start()
     gui = not args.headless and (os.environ.get("WAYLAND_DISPLAY") or os.environ.get("DISPLAY"))
     try:
         if gui:
@@ -57,11 +56,19 @@ def _run(args) -> int:
                 logging.getLogger("cursor-speak").warning("GUI unavailable (%s); running headless", e)
                 gui = False
         if gui:
-            app = TrayApp(ctl, force_window=args.window)
+            # Build the window before first-run voice setup so a main window
+            # appears immediately (AppImageHub and the desktop launcher).
+            app = TrayApp(
+                ctl,
+                force_window=args.window,
+                start_hidden=args.background,
+            )
             logging.getLogger("cursor-speak").info("UI mode: %s", app.mode)
+            ctl.start()
             GLib_main_with_signals(ctl)
             app.run()
         else:
+            ctl.start()
             for sig in (signal.SIGINT, signal.SIGTERM):
                 signal.signal(sig, lambda *_: ctl.request_quit())
             ctl.quit_event.wait()
@@ -115,7 +122,7 @@ def _autostart(args) -> int:
     return 0
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="cursor-speak",
         description="Reads new Cursor CLI replies out loud. With no command, starts the app.",
@@ -125,7 +132,14 @@ def main(argv: list[str] | None = None) -> int:
     r = sub.add_parser("run", help="start the app (default)")
     for sp in (p, r):
         sp.add_argument("--headless", action="store_true", help="no tray icon or window")
-        sp.add_argument("--window", action="store_true", help="use a small window instead of the tray icon")
+        sp.add_argument("--window", action="store_true", help="always show the main window")
+        sp.add_argument(
+            "--background",
+            "--hidden",
+            dest="background",
+            action="store_true",
+            help="start hidden (tray only, or no window if there is no tray); used at login",
+        )
         sp.add_argument("-v", "--verbose", action="store_true", help="log to the terminal")
     for name, text in (
         ("pause", "stop reading new replies until resumed"), ("resume", "start reading new replies again"),
@@ -141,8 +155,11 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("setup", help="download piper and the voice now (otherwise done on first run)")
     a = sub.add_parser("autostart", help="start at login: on, off, or status")
     a.add_argument("state", choices=["on", "off", "status"], nargs="?", default="status")
+    return p
 
-    args = p.parse_args(argv)
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
     cmd = args.cmd or "run"
     if cmd == "run":
         return _run(args)

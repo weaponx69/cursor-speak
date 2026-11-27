@@ -1,12 +1,12 @@
 import os
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+import sys
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from cursor_speak import autostart, config  # noqa: E402
 
 
@@ -44,7 +44,7 @@ class AutostartTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"APPIMAGE": "/opt/apps/Cursor_Speak.AppImage"}):
             autostart.set_enabled(True)
         text = self.user.read_text()
-        self.assertIn('Exec="/opt/apps/Cursor_Speak.AppImage"', text)
+        self.assertIn('Exec="/opt/apps/Cursor_Speak.AppImage" --background', text)
         self.assertTrue(autostart.is_enabled())
         autostart.set_enabled(False)
         self.assertFalse(autostart.is_enabled())
@@ -54,7 +54,7 @@ class AutostartTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {}, clear=False):
             os.environ.pop("APPIMAGE", None)
             autostart.set_enabled(True)
-        self.assertIn("Exec=cursor-speak", self.user.read_text())
+        self.assertIn("Exec=cursor-speak --background", self.user.read_text())
 
 
 if __name__ == "__main__":

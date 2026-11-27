@@ -7,6 +7,8 @@ Two cases:
 - No system entry (AppImage, source checkout): off by default. Turning it on writes
   ~/.config/autostart/cursor-speak.desktop that launches this AppImage (or
   `cursor-speak`); turning it off removes that file.
+
+Login entries always pass --background so a window does not pop up at login.
 """
 
 from __future__ import annotations
@@ -40,7 +42,8 @@ NoDisplay=true
 
 def _exec_line() -> str:
     appimage = os.environ.get("APPIMAGE")
-    return f'"{appimage}"' if appimage else "cursor-speak"
+    cmd = f'"{appimage}"' if appimage else "cursor-speak"
+    return f"{cmd} --background"
 
 
 def _hidden(text: str) -> bool:

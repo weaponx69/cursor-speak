@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import urllib.request
@@ -16,6 +17,11 @@ HF_BASE = os.environ.get(
     "CURSOR_SPEAK_VOICE_BASE", "https://huggingface.co/rhasspy/piper-voices/resolve/main"
 )
 Progress = Callable[[str], None]
+
+# Fail fast when offline or when no wheel exists (old Python, no network).
+PIP_TIMEOUT_SEC = 15
+PIP_RETRIES = 0
+PIP_RUN_TIMEOUT_SEC = 60
 
 
 def venv_python() -> Path:
@@ -46,6 +52,47 @@ def is_ready(voice: str) -> bool:
         return False
 
 
+def host_python() -> str:
+    """Python used to create the per-user venv.
+
+    Prefer a host interpreter so the venv still works after an AppImage remounts
+    at a new path. Fall back to the running interpreter.
+    """
+    env = os.environ.get("CURSOR_SPEAK_HOST_PYTHON")
+    if env and Path(env).is_file() and os.access(env, os.X_OK):
+        return env
+    appdir = os.environ.get("APPDIR")
+    candidates = []
+    which = shutil.which("python3")
+    if which:
+        candidates.append(which)
+    candidates.append(sys.executable)
+    for cand in candidates:
+        if not cand:
+            continue
+        real = os.path.realpath(cand)
+        if appdir and (real == os.path.realpath(appdir) or real.startswith(os.path.realpath(appdir) + os.sep)):
+            continue
+        if Path(cand).is_file():
+            return cand
+    return sys.executable
+
+
+def pip_install_cmd(py: Path | str) -> list[str]:
+    return [
+        str(py),
+        "-m",
+        "pip",
+        "install",
+        "--disable-pip-version-check",
+        "--retries",
+        str(PIP_RETRIES),
+        "--timeout",
+        str(PIP_TIMEOUT_SEC),
+        "piper-tts",
+    ]
+
+
 def _download(url: str, dest: Path, progress: Progress) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     part = dest.with_suffix(dest.suffix + ".part")
@@ -71,13 +118,18 @@ def run(voice: str, progress: Progress = print) -> None:
     py = venv_python()
     if not py.exists():
         progress("Creating Python environment")
-        subprocess.run([sys.executable, "-m", "venv", str(config.VENV_DIR)], check=True)
+        subprocess.run(
+            [host_python(), "-m", "venv", str(config.VENV_DIR)],
+            check=True,
+            timeout=PIP_RUN_TIMEOUT_SEC,
+        )
     have = subprocess.run([str(py), "-c", "import piper"], capture_output=True).returncode == 0
     if not have:
         progress("Installing piper (a one-time download)")
         subprocess.run(
-            [str(py), "-m", "pip", "install", "--disable-pip-version-check", "--quiet", "piper-tts"],
+            pip_install_cmd(py),
             check=True,
+            timeout=PIP_RUN_TIMEOUT_SEC,
         )
     onnx, js = voice_paths(voice)
     if not js.exists():
@@ -87,6 +139,6 @@ def run(voice: str, progress: Progress = print) -> None:
         _download(voice_url(voice, ".onnx"), onnx, progress)
     progress("Testing voice")
     worker = Path(__file__).with_name("piper_worker.py")
-    subprocess.run([str(py), str(worker), "--selftest", str(onnx)], check=True, capture_output=True)
+    subprocess.run([str(py), str(worker), "--selftest", str(onnx)], check=True, capture_output=True, timeout=60)
     config.READY_MARKER.write_text(json.dumps({"voice": voice}))
     progress("Voice ready")

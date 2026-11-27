@@ -1,4 +1,4 @@
-"""GTK3 front end: AppIndicator tray icon (GNOME), or a small window if no tray."""
+"""GTK3 front end: a main window, plus an AppIndicator tray icon when available."""
 
 from __future__ import annotations
 
@@ -63,7 +63,10 @@ def _icon_dir() -> str | None:
 
 
 def tray_host_available(wait_seconds: float = 0.0) -> bool:
-    """True when a StatusNotifier host exists (GNOME: ubuntu-appindicators extension)."""
+    """True when a StatusNotifier host exists (GNOME: ubuntu-appindicators extension).
+
+    Do not block the main window on this; pass 0 (the default) at startup.
+    """
     deadline = time.monotonic() + wait_seconds
     while True:
         try:
@@ -82,41 +85,60 @@ def tray_host_available(wait_seconds: float = 0.0) -> bool:
         time.sleep(1)
 
 
+def hide_window_on_close(has_tray: bool) -> bool:
+    """Closing the main window hides to the tray when a tray icon exists."""
+    return has_tray
+
+
 class TrayApp:
-    def __init__(self, ctl, force_window: bool = False):
+    def __init__(self, ctl, force_window: bool = False, start_hidden: bool = False):
         self.ctl = ctl
         self.indicator = None
         self.window = None
-        use_tray = AppIndicator is not None and not force_window and tray_host_available(20.0)
+        self.show_item = None
+        # Never wait for a tray host: a main window must appear promptly.
+        use_tray = AppIndicator is not None and tray_host_available(0.0)
         self.menu = self._build_menu()
         if use_tray:
-            theme = _icon_dir()
-            if theme:
-                self.indicator = AppIndicator.Indicator.new_with_path(
-                    APP_ID, APP_ID, AppIndicator.IndicatorCategory.APPLICATION_STATUS, theme
-                )
-            else:
-                self.indicator = AppIndicator.Indicator.new(
-                    APP_ID, APP_ID, AppIndicator.IndicatorCategory.APPLICATION_STATUS
-                )
-            self.indicator.set_title("Cursor Speak")
-            self.indicator.set_status(AppIndicator.IndicatorStatus.ACTIVE)
-            self.indicator.set_menu(self.menu)
-            self.mode = "tray"
+            self._build_indicator()
+        elif AppIndicator is None:
+            log.info("no appindicator typelib; window only")
         else:
-            if not force_window:
-                log.warning("no tray available; showing a window instead")
+            log.info("no tray host; window only")
+
+        show_window = force_window or not start_hidden
+        if show_window:
             self._build_window()
-            self.mode = "window"
+            self.mode = "tray+window" if use_tray else "window"
+        else:
+            self.mode = "tray" if use_tray else "hidden"
+            log.info("starting hidden (mode=%s)", self.mode)
+
         GLib.timeout_add(1000, self._refresh)
         GLib.timeout_add(500, self._poll_quit)
         self._refresh()
+
+    def _build_indicator(self) -> None:
+        theme = _icon_dir()
+        if theme:
+            self.indicator = AppIndicator.Indicator.new_with_path(
+                APP_ID, APP_ID, AppIndicator.IndicatorCategory.APPLICATION_STATUS, theme
+            )
+        else:
+            self.indicator = AppIndicator.Indicator.new(
+                APP_ID, APP_ID, AppIndicator.IndicatorCategory.APPLICATION_STATUS
+            )
+        self.indicator.set_title("Cursor Speak")
+        self.indicator.set_status(AppIndicator.IndicatorStatus.ACTIVE)
+        self.indicator.set_menu(self.menu)
 
     # menu -----------------------------------------------------------------------
     def _build_menu(self) -> Gtk.Menu:
         m = Gtk.Menu()
         self.status_item = Gtk.MenuItem(label="Starting")
         self.status_item.set_sensitive(False)
+        self.show_item = Gtk.MenuItem(label="Show window")
+        self.show_item.connect("activate", lambda _w: self.present_window())
         self.pause_item = Gtk.MenuItem(label="Pause")
         self.pause_item.connect("activate", lambda _w: self.ctl.toggle())
         stop_item = Gtk.MenuItem(label="Stop speaking")
@@ -131,40 +153,60 @@ class TrayApp:
         quit_item = Gtk.MenuItem(label="Quit")
         quit_item.connect("activate", lambda _w: self._quit())
         for item in (
-            self.status_item, Gtk.SeparatorMenuItem(), self.pause_item, stop_item, replay_item,
-            test_item, Gtk.SeparatorMenuItem(), self.autostart_item, Gtk.SeparatorMenuItem(), quit_item,
+            self.status_item, Gtk.SeparatorMenuItem(), self.show_item, self.pause_item, stop_item,
+            replay_item, test_item, Gtk.SeparatorMenuItem(), self.autostart_item,
+            Gtk.SeparatorMenuItem(), quit_item,
         ):
             m.append(item)
         m.show_all()
         return m
 
     def _build_window(self) -> None:
+        if self.window is not None:
+            self.window.present()
+            return
         w = Gtk.Window(title="Cursor Speak")
-        w.set_default_size(260, 10)
+        w.set_default_size(320, 280)
         w.set_icon_name(APP_ID)
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, margin=10)
-        self.win_status = Gtk.Label(label="Starting")
+        self.win_status = Gtk.Label(label="Starting", justify=Gtk.Justification.LEFT)
+        self.win_status.set_line_wrap(True)
+        self.win_status.set_xalign(0)
         box.pack_start(self.win_status, False, False, 0)
+        self.win_voice = Gtk.Label(label="Voice: …", justify=Gtk.Justification.LEFT)
+        self.win_voice.set_xalign(0)
+        box.pack_start(self.win_voice, False, False, 0)
         self.win_pause = Gtk.Button(label="Pause")
         self.win_pause.connect("clicked", lambda _b: self.ctl.toggle())
+        box.pack_start(self.win_pause, False, False, 0)
         for label, fn in (("Stop speaking", self.ctl.stop_speaking), ("Replay last", self.ctl.replay),
                           ("Speak a test phrase", self.ctl.test)):
             b = Gtk.Button(label=label)
             b.connect("clicked", lambda _b, f=fn: f())
-            if label == "Stop speaking":
-                box.pack_start(self.win_pause, False, False, 0)
             box.pack_start(b, False, False, 0)
         chk = Gtk.CheckButton(label="Start at login")
         chk.set_active(autostart.is_enabled())
         chk.connect("toggled", lambda c: autostart.set_enabled(c.get_active()))
+        self.win_autostart = chk
         box.pack_start(chk, False, False, 0)
         q = Gtk.Button(label="Quit")
         q.connect("clicked", lambda _b: self._quit())
         box.pack_start(q, False, False, 0)
         w.add(box)
-        w.connect("delete-event", lambda *_: (self._quit(), True)[1])
+        w.connect("delete-event", self._on_delete)
         w.show_all()
         self.window = w
+
+    def present_window(self) -> None:
+        self._build_window()
+        self.window.present()
+
+    def _on_delete(self, *_args):
+        if hide_window_on_close(self.indicator is not None):
+            self.window.hide()
+            return True
+        self._quit()
+        return True
 
     # updates ------------------------------------------------------------------------
     def _refresh(self) -> bool:
@@ -176,7 +218,8 @@ class TrayApp:
             icon = f"{APP_ID}-paused" if ctl.paused else APP_ID
             self.indicator.set_icon_full(icon, "Cursor Speak")
         if self.window:
-            self.win_status.set_text(f"{status}\nVoice: {ctl.speaker.backend}")
+            self.win_status.set_text(status)
+            self.win_voice.set_text(f"Voice: {ctl.speaker.backend}")
             self.win_pause.set_label("Resume" if ctl.paused else "Pause")
         return True
 

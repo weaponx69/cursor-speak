@@ -2,7 +2,7 @@
 Type=Application
 Name=Cursor Speak
 Comment=Reads new Cursor CLI replies out loud
-Exec=cursor-speak
+Exec=cursor-speak --background
 Icon=cursor-speak
 Terminal=false
 X-GNOME-Autostart-enabled=true

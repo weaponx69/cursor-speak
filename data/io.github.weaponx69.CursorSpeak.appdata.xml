@@ -40,6 +40,17 @@
   </keywords>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.1.2" date="2026-11-27">
+      <description>
+        <p>
+          Shows a main window on launch, starts hidden only at login, and ships
+          a self-contained AppImage with Python and GTK 3 so it runs on Ubuntu
+          22.04 and newer without host PyGObject. First-run piper setup no
+          longer blocks the window; espeak-ng or spd-say is used when piper
+          cannot be installed.
+        </p>
+      </description>
+    </release>
     <release version="0.1.1" date="2026-11-27">
       <description>
         <p>Adds an AppImage build and an AppStream description.</p>
