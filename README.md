@@ -17,7 +17,7 @@ leaving out code blocks, commands, file paths and tool output.
 
 ```sh
 ./build-deb.sh
-sudo apt install ./dist-deb/cursor-speak_0.1.3_all.deb
+sudo apt install ./dist-deb/cursor-speak_0.1.4_all.deb
 ```
 
 Then start **Cursor Speak** from the app menu (or run `cursor-speak`). A small
@@ -159,7 +159,7 @@ Bump `__version__` in `src/cursor_speak/__init__.py` and add a `<release>` entry
 `data/io.github.weaponx69.CursorSpeak.appdata.xml`, then:
 
 ```sh
-git tag v0.1.2 && git push origin v0.1.2
+git tag v0.1.4 && git push origin v0.1.4
 ```
 
 The `release` workflow builds the `.deb` and the AppImage and attaches them (plus

@@ -28,9 +28,10 @@ should_bundle() {
         0|no|false) return 1 ;;
     esac
     if [ -f /etc/os-release ]; then
-        # shellcheck disable=SC1091
-        . /etc/os-release
-        [ "${VERSION_ID:-}" = "22.04" ]
+        # Read in a subshell so NAME/ID/VERSION from os-release cannot
+        # clobber this script's AppStream id and app version.
+        os_version_id="$(. /etc/os-release && printf '%s' "${VERSION_ID:-}")"
+        [ "$os_version_id" = "22.04" ]
         return $?
     fi
     return 1
