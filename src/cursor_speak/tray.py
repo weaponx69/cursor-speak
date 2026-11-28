@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import shutil
+import subprocess
 import time
 from pathlib import Path
 
@@ -23,7 +24,7 @@ except (ValueError, ImportError):
     except (ValueError, ImportError):
         AppIndicator = None
 
-from . import APP_ID, autostart  # noqa: E402
+from . import APP_ID, autostart, config, deliver, launcher, shortcut, stt  # noqa: E402
 
 log = logging.getLogger("cursor-speak.tray")
 
@@ -90,6 +91,27 @@ def hide_window_on_close(has_tray: bool) -> bool:
     return has_tray
 
 
+MODE_LABELS = (
+    ("new", "Open a new cursor-agent with what I say"),
+    ("type", "Type into the focused window"),
+    ("clipboard", "Copy to the clipboard"),
+)
+
+
+def accel_label(accel: str) -> str:
+    """'<Super><Alt>space' -> 'Super+Alt+Space'."""
+    mods, key = shortcut.normalize(accel)
+    order = ["super", "control", "alt", "shift"]
+    names = [m.capitalize() if m != "control" else "Ctrl" for m in order if m in mods]
+    return "+".join(names + [key.capitalize()])
+
+
+def start_listen() -> None:
+    """Same as the keyboard shortcut: start, or stop and send."""
+    subprocess.Popen(launcher.self_command() + ["listen", "--toggle"], start_new_session=True,
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
 class TrayApp:
     def __init__(self, ctl, force_window: bool = False, start_hidden: bool = False):
         self.ctl = ctl
@@ -145,6 +167,8 @@ class TrayApp:
         stop_item.connect("activate", lambda _w: self.ctl.stop_speaking())
         replay_item = Gtk.MenuItem(label="Replay last")
         replay_item.connect("activate", lambda _w: self.ctl.replay())
+        talk_item = Gtk.MenuItem(label="Talk to Cursor (start/stop)")
+        talk_item.connect("activate", lambda _w: start_listen())
         test_item = Gtk.MenuItem(label="Speak a test phrase")
         test_item.connect("activate", lambda _w: self.ctl.test())
         self.autostart_item = Gtk.CheckMenuItem(label="Start at login")
@@ -153,7 +177,7 @@ class TrayApp:
         quit_item = Gtk.MenuItem(label="Quit")
         quit_item.connect("activate", lambda _w: self._quit())
         for item in (
-            self.status_item, Gtk.SeparatorMenuItem(), self.show_item, self.pause_item, stop_item,
+            self.status_item, Gtk.SeparatorMenuItem(), self.show_item, talk_item, self.pause_item, stop_item,
             replay_item, test_item, Gtk.SeparatorMenuItem(), self.autostart_item,
             Gtk.SeparatorMenuItem(), quit_item,
         ):
@@ -166,7 +190,7 @@ class TrayApp:
             self.window.present()
             return
         w = Gtk.Window(title="Cursor Speak")
-        w.set_default_size(320, 280)
+        w.set_default_size(360, -1)
         w.set_icon_name(APP_ID)
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, margin=10)
         self.win_status = Gtk.Label(label="Starting", justify=Gtk.Justification.LEFT)
@@ -184,6 +208,7 @@ class TrayApp:
             b = Gtk.Button(label=label)
             b.connect("clicked", lambda _b, f=fn: f())
             box.pack_start(b, False, False, 0)
+        box.pack_start(self._build_voice_input(), False, False, 4)
         chk = Gtk.CheckButton(label="Start at login")
         chk.set_active(autostart.is_enabled())
         chk.connect("toggled", lambda c: autostart.set_enabled(c.get_active()))
@@ -196,6 +221,69 @@ class TrayApp:
         w.connect("delete-event", self._on_delete)
         w.show_all()
         self.window = w
+
+    def _build_voice_input(self) -> Gtk.Widget:
+        cfg = self.ctl.cfg
+        frame = Gtk.Frame(label="Voice input (talk to Cursor)")
+        v = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, margin=6)
+        self.win_talk = Gtk.Button(label="Talk")
+        self.win_talk.connect("clicked", lambda _b: start_listen())
+        v.pack_start(self.win_talk, False, False, 0)
+        combo = Gtk.ComboBoxText()
+        for mode, label in MODE_LABELS:
+            combo.append(mode, label)
+        combo.set_active_id(cfg.get("listen_mode", "new"))
+        combo.connect("changed", lambda c: self._set_cfg("listen_mode", c.get_active_id()))
+        v.pack_start(combo, False, False, 0)
+        enter = Gtk.CheckButton(label="Press Enter after typing")
+        enter.set_active(bool(cfg.get("listen_press_enter", False)))
+        enter.connect("toggled", lambda c: self._set_cfg("listen_press_enter", c.get_active()))
+        v.pack_start(enter, False, False, 0)
+        hold = Gtk.CheckButton(label="Pause speech while I talk")
+        hold.set_active(bool(cfg.get("pause_tts_while_listening", True)))
+        hold.connect("toggled", lambda c: self._set_cfg("pause_tts_while_listening", c.get_active()))
+        v.pack_start(hold, False, False, 0)
+        self.win_voice_note = Gtk.Label(label="", justify=Gtk.Justification.LEFT)
+        self.win_voice_note.set_line_wrap(True)
+        self.win_voice_note.set_xalign(0)
+        self.win_voice_note.set_selectable(True)
+        v.pack_start(self.win_voice_note, False, False, 0)
+        frame.add(v)
+        self._voice_note_at = 0.0
+        return frame
+
+    def _set_cfg(self, key: str, value) -> None:
+        self.ctl.cfg[key] = value
+        try:
+            config.save_config({key: value})
+        except OSError:
+            log.warning("could not save %s", key)
+        self._voice_note_at = 0.0
+
+    def _voice_note(self) -> str:
+        cfg = self.ctl.cfg
+        lines = []
+        try:
+            sc = shortcut.status()
+        except Exception:
+            sc = None
+        lines.append(f"Shortcut: {accel_label(sc['binding'])}" if sc and sc.get("binding")
+                     else "Shortcut: none (run: cursor-speak shortcut install)")
+        model = cfg.get("stt_model", "base.en")
+        if stt.is_ready(model):
+            lines.append(f"Speech model: {model} (local)")
+        elif stt.setup_running():
+            lines.append("Speech model: downloading…")
+        else:
+            lines.append("Speech model: downloads on first use")
+        if cfg.get("listen_mode") == "type":
+            backend = deliver.type_backend()
+            if backend == "clipboard":
+                lines.append("Typing needs ydotool; until then text goes to the clipboard. "
+                             "Run: cursor-speak listen --check")
+            else:
+                lines.append(f"Typing with {backend}")
+        return "\n".join(lines)
 
     def present_window(self) -> None:
         self._build_window()
@@ -215,9 +303,14 @@ class TrayApp:
         self.status_item.set_label(f"Cursor Speak: {status}")
         self.pause_item.set_label("Resume" if ctl.paused else "Pause")
         if self.indicator:
-            icon = f"{APP_ID}-paused" if ctl.paused else APP_ID
+            icon = f"{APP_ID}-listening" if ctl.listening else f"{APP_ID}-paused" if ctl.paused else APP_ID
             self.indicator.set_icon_full(icon, "Cursor Speak")
         if self.window:
+            self.win_talk.set_label("Stop and send" if ctl.listening == "on" else "Talk")
+            now = time.monotonic()
+            if now - self._voice_note_at > 5:
+                self._voice_note_at = now
+                self.win_voice_note.set_text(self._voice_note())
             self.win_status.set_text(status)
             self.win_voice.set_text(f"Voice: {ctl.speaker.backend}")
             self.win_pause.set_label("Resume" if ctl.paused else "Pause")

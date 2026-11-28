@@ -25,6 +25,10 @@ READY_MARKER = DATA_DIR / "piper-ready.json"
 STATE_FILE = STATE_DIR / "state.json"
 LOG_FILE = STATE_DIR / "cursor-speak.log"
 CONFIG_FILE = CONFIG_DIR / "config.json"
+STT_VENV_DIR = DATA_DIR / "stt-venv"
+STT_MODELS_DIR = DATA_DIR / "whisper-models"
+STT_READY_MARKER = DATA_DIR / "stt-ready.json"
+STT_SETUP_LOCK = DATA_DIR / "stt-setup.lock"
 
 
 def socket_path() -> Path:
@@ -50,6 +54,28 @@ DEFAULTS = {
     "quiet_seconds": 3.0,
     # Download piper and the voice on first run
     "auto_setup": True,
+    # --- Voice input (push-to-talk, `cursor-speak listen`) ---
+    # Local faster-whisper model: tiny.en, base.en (default), small.en (better, slower)
+    "stt_model": "base.en",
+    "stt_language": "en",
+    # Where your words go: "new" opens a terminal running cursor-agent "<text>";
+    # "type" types into the focused window (e.g. a running cursor-agent);
+    # "clipboard" only copies
+    "listen_mode": "new",
+    # In "type" mode, press Enter after typing
+    "listen_press_enter": False,
+    # Folder a new cursor-agent starts in
+    "agent_cwd": "~",
+    "agent_command": "cursor-agent",
+    # Stop reading replies out loud while you talk
+    "pause_tts_while_listening": True,
+    # Recording ends after this much quiet (seconds), or at listen_max_seconds
+    "listen_silence_seconds": 1.5,
+    "listen_no_speech_seconds": 8,
+    "listen_max_seconds": 60,
+    # Mic level (16-bit RMS) that counts as speech
+    "listen_threshold": 500,
+    "listen_notify": True,
 }
 
 
@@ -62,3 +88,18 @@ def load_config() -> dict:
     except (OSError, ValueError):
         pass
     return cfg
+
+
+def save_config(updates: dict) -> None:
+    """Merge `updates` into config.json (keeps keys the user added by hand)."""
+    try:
+        current = json.loads(CONFIG_FILE.read_text())
+        if not isinstance(current, dict):
+            current = {}
+    except (OSError, ValueError):
+        current = {}
+    current.update(updates)
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = CONFIG_FILE.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(current, indent=2) + "\n")
+    tmp.replace(CONFIG_FILE)

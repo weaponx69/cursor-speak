@@ -113,6 +113,80 @@ def _setup(args) -> int:
     return 0
 
 
+def _listen(args) -> int:
+    from . import listen
+
+    cfg = config.load_config()
+    if args.check:
+        return _listen_check(cfg)
+    if args.stop:
+        print("Stopped listening." if listen.stop_active() else "Not listening.")
+        return 0
+    _setup_logging(False)
+    return listen.run(cfg, toggle=args.toggle, mode=args.mode, enter=args.enter,
+                      wav=args.file, notify=not args.quiet)
+
+
+def _listen_check(cfg: dict) -> int:
+    from . import deliver, recorder, shortcut, stt
+
+    model = cfg.get("stt_model", "base.en")
+    rec = recorder.recorder_cmd()
+    print(f"microphone recorder: {rec[0] if rec else 'MISSING (install pipewire-bin)'}")
+    state = "ready" if stt.is_ready(model) else "setting up" if stt.setup_running() else "not set up (downloads on first use, or run: cursor-speak setup-stt)"
+    print(f"speech model ({model}, local faster-whisper): {state}")
+    print(f"output mode: {cfg.get('listen_mode', 'new')}   press Enter after typing: {cfg.get('listen_press_enter', False)}")
+    print(f"cursor-agent: {deliver.agent_path(cfg)}")
+    term = deliver.terminal_cmd(["cursor-agent"], "~")
+    print(f"terminal for new sessions: {term[0] if term else 'MISSING'}")
+    print(f"typing backend: {deliver.type_backend()}")
+    steps = deliver.ydotool_help()
+    if steps:
+        print("\nTo type into windows with ydotool, run these yourself:")
+        for s in steps:
+            print(f"  {s}")
+    try:
+        sc = shortcut.status()
+    except Exception as e:
+        sc = None
+        print(f"shortcut: unavailable ({e})")
+    else:
+        print(f"shortcut: {sc['binding']} -> {sc['command']}" if sc else "shortcut: none (cursor-speak shortcut install)")
+    return 0
+
+
+def _setup_stt(args) -> int:
+    from . import stt
+
+    cfg = config.load_config()
+    model = args.model or cfg.get("stt_model", "base.en")
+    try:
+        stt.run(model, print)
+    except Exception as e:
+        print(f"Speech recognition setup failed: {e}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def _shortcut(args) -> int:
+    from . import launcher, shortcut
+
+    try:
+        if args.action == "install":
+            cmd = launcher.shortcut_command(args.command)
+            accel = shortcut.install(cmd, args.key)
+            print(f"Shortcut {accel} runs: {cmd}")
+        elif args.action == "remove":
+            print("Removed." if shortcut.remove() else "No Cursor Speak shortcut was set.")
+        else:
+            sc = shortcut.status()
+            print(f"{sc['binding']} -> {sc['command']}" if sc else "No Cursor Speak shortcut is set.")
+    except RuntimeError as e:
+        print(f"Shortcut: {e}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def _autostart(args) -> int:
     if args.state == "on":
         autostart.set_enabled(True)
@@ -153,6 +227,24 @@ def build_parser() -> argparse.ArgumentParser:
     latest = sub.add_parser("latest", help="show what would be read for the newest reply (no speech)")
     latest.add_argument("--chat", help="a specific chat directory")
     sub.add_parser("setup", help="download piper and the voice now (otherwise done on first run)")
+    li = sub.add_parser("listen", help="push-to-talk: record, transcribe locally, send to cursor-agent")
+    li.add_argument("--toggle", action="store_true", help="stop a recording in progress, or start one (for a shortcut)")
+    li.add_argument("--stop", action="store_true", help="stop a recording in progress")
+    li.add_argument("--mode", choices=["new", "type", "clipboard", "print"],
+                    help="new: open cursor-agent with the text; type: type into the focused window; "
+                         "clipboard: copy; print: just print (default from config)")
+    g = li.add_mutually_exclusive_group()
+    g.add_argument("--enter", dest="enter", action="store_true", default=None, help="press Enter after typing")
+    g.add_argument("--no-enter", dest="enter", action="store_false", help="don't press Enter after typing")
+    li.add_argument("--file", help="transcribe this WAV instead of recording")
+    li.add_argument("--check", action="store_true", help="show what voice input will use and what is missing")
+    li.add_argument("-q", "--quiet", action="store_true", help="no desktop notifications")
+    ss = sub.add_parser("setup-stt", help="download faster-whisper and the speech model now")
+    ss.add_argument("--model", help="tiny.en, base.en, small.en, ... (default from config)")
+    sc = sub.add_parser("shortcut", help="GNOME keyboard shortcut for push-to-talk: install, remove or status")
+    sc.add_argument("action", choices=["install", "remove", "status"], nargs="?", default="status")
+    sc.add_argument("--key", help="e.g. '<Super><Alt>space' (default: first free of a few)")
+    sc.add_argument("--command", help="launcher to run (default: this copy of cursor-speak)")
     a = sub.add_parser("autostart", help="start at login: on, off, or status")
     a.add_argument("state", choices=["on", "off", "status"], nargs="?", default="status")
     return p
@@ -173,4 +265,10 @@ def main(argv: list[str] | None = None) -> int:
         return _setup(args)
     if cmd == "autostart":
         return _autostart(args)
+    if cmd == "listen":
+        return _listen(args)
+    if cmd == "setup-stt":
+        return _setup_stt(args)
+    if cmd == "shortcut":
+        return _shortcut(args)
     return 2

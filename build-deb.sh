@@ -13,7 +13,7 @@ install -d "$STAGE/DEBIAN" "$STAGE/usr/lib/cursor-speak" "$STAGE/usr/bin" \
 
 cp -r src/cursor_speak "$STAGE/usr/lib/cursor-speak/"
 find "$STAGE/usr/lib/cursor-speak" -name __pycache__ -prune -exec rm -rf {} +
-chmod 755 "$STAGE/usr/lib/cursor-speak/cursor_speak/piper_worker.py"
+chmod 755 "$STAGE/usr/lib/cursor-speak/cursor_speak/piper_worker.py" "$STAGE/usr/lib/cursor-speak/cursor_speak/stt_worker.py"
 
 cat > "$STAGE/usr/bin/cursor-speak" <<'LAUNCH'
 #!/bin/sh
@@ -41,7 +41,7 @@ sed -e "s/@VERSION@/$VERSION/" -e "s/@SIZE@/$SIZE/" packaging/DEBIAN/control > "
 install -m 755 packaging/DEBIAN/postinst packaging/DEBIAN/postrm "$STAGE/DEBIAN/"
 
 find "$STAGE" -type d -exec chmod 755 {} +
-find "$STAGE" -type f -not -path "*/DEBIAN/*" -not -name cursor-speak -not -name piper_worker.py -exec chmod 644 {} +
+find "$STAGE" -type f -not -path "*/DEBIAN/*" -not -name cursor-speak -not -name piper_worker.py -not -name stt_worker.py -exec chmod 644 {} +
 mkdir -p dist-deb
 dpkg-deb --root-owner-group --build "$STAGE" "dist-deb/$PKG.deb"
 echo

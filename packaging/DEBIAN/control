@@ -6,7 +6,7 @@ Architecture: all
 Maintainer: Brian Perry <perry.brian@gmail.com>
 Installed-Size: @SIZE@
 Depends: python3 (>= 3.10), python3-gi, gir1.2-gtk-3.0, gir1.2-ayatanaappindicator3-0.1, python3-venv, speech-dispatcher | espeak-ng, pipewire-bin | pulseaudio-utils | alsa-utils
-Recommends: libnotify-bin
+Recommends: libnotify-bin, wl-clipboard, ydotool
 Description: Reads new Cursor CLI replies out loud
  Cursor Speak sits in the system tray, watches your Cursor CLI (cursor-agent)
  chats, and reads each finished reply out loud. Code blocks, commands, file
@@ -17,3 +17,8 @@ Description: Reads new Cursor CLI replies out loud
  ~/.local/share/cursor-speak (about 80 MB, nothing is bundled in this package),
  with espeak-ng or speech-dispatcher as a fallback. Chat files are only ever
  opened read-only.
+ .
+ Voice input: press a keyboard shortcut, talk, and your words go to a new
+ cursor-agent session or are typed into the focused window (ydotool). Speech is
+ recognised on your computer with faster-whisper (downloaded per user on first
+ use, about 200 MB); no cloud speech service is used.

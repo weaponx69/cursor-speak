@@ -21,6 +21,7 @@
       <li>Never speaks old replies when it starts</li>
       <li>Opens chat files read-only and never touches the Cursor process</li>
       <li>Local neural voice (piper), downloaded on first run, with espeak-ng as a fallback</li>
+      <li>Push-to-talk voice input: speak to start a new cursor-agent session or type into a running one, recognised locally with faster-whisper</li>
     </ul>
   </description>
   <launchable type="desktop-id">io.github.weaponx69.CursorSpeak.desktop</launchable>
@@ -37,9 +38,21 @@
     <keyword>cursor</keyword>
     <keyword>text to speech</keyword>
     <keyword>read aloud</keyword>
+    <keyword>voice input</keyword>
+    <keyword>speech recognition</keyword>
   </keywords>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.1.5" date="2026-11-28">
+      <description>
+        <p>
+          Adds push-to-talk voice input. A keyboard shortcut (or the Talk
+          button) records your voice, faster-whisper turns it into text on your
+          computer, and the text opens a new cursor-agent session or is typed
+          into the focused window with ydotool. Speech is paused while you talk.
+        </p>
+      </description>
+    </release>
     <release version="0.1.4" date="2026-11-27">
       <description>
         <p>

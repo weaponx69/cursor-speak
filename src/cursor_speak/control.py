@@ -9,7 +9,7 @@ import threading
 
 from . import config
 
-COMMANDS = {"pause", "resume", "toggle", "stop", "replay", "status", "test", "quit", "ping", "say"}
+COMMANDS = {"pause", "resume", "toggle", "stop", "replay", "status", "test", "quit", "ping", "say", "listening"}
 
 
 def send(command: str, timeout: float = 3.0) -> str | None:
@@ -74,6 +74,8 @@ class Server:
             return "ok" if c.replay() else "nothing to replay yet"
         elif cmd == "test":
             c.test()
+        elif cmd == "listening" and arg in ("on", "busy", "off"):
+            c.set_listening(arg)
         elif cmd == "say" and arg:
             c.say(arg)
         elif cmd == "quit":

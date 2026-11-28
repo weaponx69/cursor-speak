@@ -23,6 +23,10 @@ class Controller:
         self.watcher = Watcher(cfg, self._on_reply)
         self.last: dict | None = None
         self.quit_event = threading.Event()
+        # Voice input state from `cursor-speak listen`: None, "on" (recording), "busy" (transcribing)
+        self.listening: str | None = None
+        self._listen_since = 0.0
+        self._held: list[str] = []
         self._load_last()
 
     # state -------------------------------------------------------------------
@@ -83,7 +87,34 @@ class Controller:
         if self.paused:
             log.info("paused; reply %s kept for Replay but not spoken", reply.id[:12])
             return
+        if self._holding():
+            log.info("listening; reply %s held until you finish talking", reply.id[:12])
+            self._held.append(spoken)
+            return
         self.speaker.speak(spoken)
+
+    # voice input -------------------------------------------------------------
+    def _holding(self) -> bool:
+        if not (self.listening and self.cfg.get("pause_tts_while_listening", True)):
+            return False
+        # A listen process that died without saying "off" must not mute us forever.
+        if time.monotonic() - self._listen_since > float(self.cfg.get("listen_max_seconds", 60)) + 330:
+            self.listening = None
+            return False
+        return True
+
+    def set_listening(self, state: str) -> None:
+        if state in ("on", "busy"):
+            if not self.listening:
+                self._listen_since = time.monotonic()
+            self.listening = state
+            if self.cfg.get("pause_tts_while_listening", True):
+                self.speaker.stop()
+            return
+        self.listening = None
+        held, self._held = self._held, []
+        if held and not self.paused:
+            self.speaker.speak(held[-1])
 
     # commands ----------------------------------------------------------------
     def pause(self) -> None:
@@ -117,6 +148,10 @@ class Controller:
         self.quit_event.set()
 
     def status_line(self) -> str:
+        if self.listening == "on":
+            return "Listening to you…"
+        if self.listening == "busy":
+            return "Transcribing…"
         if self.setup_note:
             return self.setup_note
         if self.paused:
@@ -134,4 +169,5 @@ class Controller:
             "setup": self.setup_note,
             "last": (self.last or {}).get("id"),
             "last_time": (self.last or {}).get("time"),
+            "listening": self.listening,
         }
