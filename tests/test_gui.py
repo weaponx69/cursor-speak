@@ -19,6 +19,8 @@ class ConversationWindowTests(unittest.TestCase):
 
         conv = mock.Mock()
         ui, GLib, Gtk = converse_ui._gtk_window({"conv": conv}, "/tmp")
+        while Gtk.events_pending():  # let the window's own "starting" state land first
+            Gtk.main_iteration()
         ui._state("thinking", "")
         ui._line("you", "run the tests")
         ui._line("tool", "$ npm test")
