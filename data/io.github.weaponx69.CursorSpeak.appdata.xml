@@ -44,6 +44,19 @@
   </keywords>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.1.7" date="2026-11-28">
+      <description>
+        <p>
+          Publishes conversation mode: the mic stays on, what you say goes
+          straight into the same cursor-agent chat, a window shows the agent's
+          progress, and its answer is read aloud. Talk over a reply to interrupt
+          it, say "stop", "pause listening", "resume", "new conversation" or
+          "goodbye", and use an optional wake word. No typing tools or root
+          access are needed. Also fixes a window test so the packages build
+          and attach to the release.
+        </p>
+      </description>
+    </release>
     <release version="0.1.6" date="2026-11-28">
       <description>
         <p>
