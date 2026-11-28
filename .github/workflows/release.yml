@@ -38,6 +38,11 @@ jobs:
       - name: Run tests
         run: python3 -m unittest discover -s tests
 
+      - name: GUI tests (conversation and main windows, under xvfb)
+        run: |
+          CURSOR_SPEAK_GUI_TESTS=1 xvfb-run -a -s "-screen 0 1024x768x24" dbus-run-session -- \
+            python3 -m unittest tests.test_gui -v
+
       - name: Build .deb
         run: ./build-deb.sh
 

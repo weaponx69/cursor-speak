@@ -76,6 +76,30 @@ DEFAULTS = {
     # Mic level (16-bit RMS) that counts as speech
     "listen_threshold": 500,
     "listen_notify": True,
+    # --- Conversation mode (`cursor-speak converse`) ---
+    # Folder the agent works in; empty = where the conversation was started
+    "converse_workspace": "",
+    # Say the wake word before each request (useful in noisy rooms); follow-ups
+    # right after a reply don't need it
+    "converse_wake_word_enabled": False,
+    "converse_wake_word": "hey cursor",
+    "converse_followup_seconds": 15,
+    # Talking over a reply: "on" stops it at once, "command" lets it finish
+    # (only voice commands act), "off" ignores the mic while speaking
+    "converse_barge_in": "on",
+    # How much louder than normal you must be to interrupt (speaker echo guard)
+    "converse_barge_factor": 3.0,
+    "converse_silence_seconds": 1.0,
+    "converse_threshold": 500,
+    # PipeWire echo cancellation (private, no root); best with speakers
+    "converse_echo_cancel": False,
+    "converse_sounds": True,
+    # cursor-agent flags: --trust (headless can't answer the trust prompt),
+    # --force (run commands without asking), --model, extra args
+    "converse_trust": True,
+    "converse_force": False,
+    "converse_model": "",
+    "converse_agent_args": [],
 }
 
 

@@ -121,7 +121,8 @@ class Speaker:
     def _player_cmd(self, wav: str) -> list[str] | None:
         vol = float(self.cfg.get("volume", 1.0))
         if shutil.which("pw-play"):
-            return ["pw-play", "--volume", str(vol), wav]
+            target = self.cfg.get("playback_target")
+            return ["pw-play", "--volume", str(vol), *(["--target", target] if target else []), wav]
         if shutil.which("aplay"):
             return ["aplay", "-q", wav]
         if shutil.which("ffplay"):

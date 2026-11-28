@@ -29,8 +29,8 @@ def launcher_path() -> str:
     return shutil.which("cursor-speak") or "/usr/bin/cursor-speak"
 
 
-def shortcut_command(launcher: str | None = None) -> str:
-    return f"{shlex.quote(launcher or launcher_path())} listen --toggle"
+def shortcut_command(launcher: str | None = None, sub: str = "listen") -> str:
+    return f"{shlex.quote(launcher or launcher_path())} {sub} --toggle"
 
 
 def host_env(environ: dict | None = None) -> dict:

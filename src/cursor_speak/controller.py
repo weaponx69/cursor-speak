@@ -27,6 +27,8 @@ class Controller:
         self.listening: str | None = None
         self._listen_since = 0.0
         self._held: list[str] = []
+        # Chats a conversation-mode session reads aloud itself; skip them here.
+        self.owned_chats: set[str] = set()
         self._load_last()
 
     # state -------------------------------------------------------------------
@@ -71,7 +73,16 @@ class Controller:
         self.speaker.close()
 
     # events ------------------------------------------------------------------
+    def own_chat(self, chat_id: str) -> None:
+        self.owned_chats.add(chat_id)
+
+    def disown_chat(self, chat_id: str) -> None:
+        self.owned_chats.discard(chat_id)
+
     def _on_reply(self, reply: chatstore.Reply) -> None:
+        if reply.chat_id in self.owned_chats:
+            log.info("reply %s belongs to a voice conversation; it reads it itself", reply.id[:12])
+            return
         spoken = textclean.clean(reply.text, self.cfg["identifiers"], int(self.cfg["max_chars"]))
         if not spoken:
             log.info("reply %s has nothing speakable; skipped", reply.id[:12])

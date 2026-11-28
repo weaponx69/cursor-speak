@@ -80,56 +80,71 @@ def used_bindings(run: Runner = subprocess.run, skip_path: str | None = None) ->
     return used
 
 
-def pick_free(used: dict, preferred: str | None = None) -> str | None:
-    for accel in ([preferred] if preferred else []) + CANDIDATES:
+def pick_free(used: dict, preferred: str | None = None, candidates: list[str] | None = None) -> str | None:
+    for accel in ([preferred] if preferred else []) + (candidates or CANDIDATES):
         if normalize(accel) not in used:
             return accel
     return None
 
 
-def _path() -> str:
-    return f"{BASE}{SLOT}/"
+CONVERSE_SLOT = "cursor-speak-converse"
+CONVERSE_NAME = "Cursor Speak: conversation on/off"
+CONVERSE_CANDIDATES = ["<Super><Alt>c", "<Super><Control>c", "<Super><Alt>t", "<Super><Shift>c"]
 
 
-def status(run: Runner = subprocess.run) -> dict | None:
+def _path(slot: str = SLOT) -> str:
+    return f"{BASE}{slot}/"
+
+
+def status(run: Runner = subprocess.run, slot: str = SLOT) -> dict | None:
     paths = parse_strv(_gs(run, "get", MEDIA, "custom-keybindings"))
-    if _path() not in paths:
+    if _path(slot) not in paths:
         return None
-    rel = f"{CUSTOM}:{_path()}"
+    rel = f"{CUSTOM}:{_path(slot)}"
     return {
         "binding": (parse_strv(_gs(run, "get", rel, "binding")) or [""])[0],
         "command": (parse_strv(_gs(run, "get", rel, "command")) or [""])[0],
     }
 
 
-def install(command: str, preferred: str | None = None, run: Runner = subprocess.run) -> str:
+def install(command: str, preferred: str | None = None, run: Runner = subprocess.run,
+            slot: str = SLOT, name: str = NAME, candidates: list[str] | None = None) -> str:
     """Create or update our slot with a conflict-free binding. Returns the binding."""
     if not shutil.which("gsettings") and run is subprocess.run:
         raise RuntimeError("gsettings not found (GNOME only)")
-    used = used_bindings(run, skip_path=_path())
-    accel = pick_free(used, preferred)
+    used = used_bindings(run, skip_path=_path(slot))
+    current = status(run, slot)
+    if not preferred and current and current.get("binding") and normalize(current["binding"]) not in used:
+        preferred = current["binding"]  # reinstalling keeps the key
+    accel = pick_free(used, preferred, candidates)
     if not accel:
         raise RuntimeError("every candidate shortcut is taken; pass --key")
     if preferred and normalize(preferred) in used:
         raise RuntimeError(f"{preferred} is already used by {used[normalize(preferred)]}")
-    rel = f"{CUSTOM}:{_path()}"
-    _gs(run, "set", rel, "name", NAME)
+    rel = f"{CUSTOM}:{_path(slot)}"
+    _gs(run, "set", rel, "name", name)
     _gs(run, "set", rel, "command", command)
     _gs(run, "set", rel, "binding", accel)
     paths = parse_strv(_gs(run, "get", MEDIA, "custom-keybindings"))
-    if _path() not in paths:
-        _gs(run, "set", MEDIA, "custom-keybindings", str(paths + [_path()]))
+    if _path(slot) not in paths:
+        _gs(run, "set", MEDIA, "custom-keybindings", str(paths + [_path(slot)]))
     return accel
 
 
-def remove(run: Runner = subprocess.run) -> bool:
+def install_converse(command: str, preferred: str | None = None, run: Runner = subprocess.run) -> str:
+    return install(command, preferred, run, slot=CONVERSE_SLOT, name=CONVERSE_NAME,
+                   candidates=CONVERSE_CANDIDATES)
+
+
+def remove(run: Runner = subprocess.run, slot: str = SLOT) -> bool:
     paths = parse_strv(_gs(run, "get", MEDIA, "custom-keybindings"))
-    if _path() not in paths:
+    if _path(slot) not in paths:
         return False
-    _gs(run, "set", MEDIA, "custom-keybindings", str([p for p in paths if p != _path()]) if len(paths) > 1 else "@as []")
+    rest = [p for p in paths if p != _path(slot)]
+    _gs(run, "set", MEDIA, "custom-keybindings", str(rest) if rest else "@as []")
     for key in ("name", "command", "binding"):
         try:
-            _gs(run, "reset", f"{CUSTOM}:{_path()}", key)
+            _gs(run, "reset", f"{CUSTOM}:{_path(slot)}", key)
         except RuntimeError:
             pass
     return True

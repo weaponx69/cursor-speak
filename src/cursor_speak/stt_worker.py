@@ -6,6 +6,9 @@ by the app.
 
   stt_worker.py --download MODEL DIR     fetch a model into DIR (one time)
   stt_worker.py --transcribe DIR WAV     print {"text": ...} as JSON
+  stt_worker.py --serve DIR [LANG]       keep the model loaded; one JSON request
+                                         per stdin line {"wav": path}, one
+                                         {"text": ...} or {"error": ...} line back
 """
 
 import json
@@ -59,7 +62,28 @@ def transcribe(model_dir: str, wav: str, language: str = "en") -> None:
     print(json.dumps({"text": text}))
 
 
+def serve(model_dir: str, language: str = "en") -> None:
+    model = _model(model_dir)
+    print(json.dumps({"ready": True}), flush=True)
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            req = json.loads(line)
+            segments, _info = model.transcribe(
+                load_wav(req["wav"]), language=language or None, beam_size=5, vad_filter=True
+            )
+            out = {"text": " ".join(s.text.strip() for s in segments).strip()}
+        except Exception as e:  # keep serving
+            out = {"error": f"{e.__class__.__name__}: {e}"}
+        print(json.dumps(out), flush=True)
+
+
 def main(argv: list) -> int:
+    if len(argv) >= 2 and argv[0] == "--serve":
+        serve(argv[1], argv[2] if len(argv) > 2 else "en")
+        return 0
     if len(argv) >= 3 and argv[0] == "--download":
         download(argv[1], argv[2])
         return 0

@@ -128,3 +128,86 @@ def _terminate(proc: subprocess.Popen) -> None:
             proc.wait(timeout=2)
         except subprocess.TimeoutExpired:
             proc.kill()
+
+
+class Segmenter:
+    """Always-on voice activity detection for conversation mode.
+
+    Feed it 30 ms frames forever. It keeps an adaptive noise floor, starts an
+    utterance after `start_s` of loud frames (keeping `preroll_s` before it so
+    the first syllable isn't lost) and ends it after `silence_s` of quiet.
+    While our own speech is playing (`speaking=True`) the bar is raised by
+    `barge_factor` and must be held longer, so the speakers' echo is less
+    likely to count as you.
+    """
+
+    def __init__(self, threshold: float = 500.0, silence_s: float = 1.0, start_s: float = 0.15,
+                 preroll_s: float = 0.3, max_s: float = 60.0, min_s: float = 0.35,
+                 barge_factor: float = 3.0, barge_start_s: float = 0.35, floor_ratio: float = 3.0):
+        self.threshold = threshold
+        self.silence_s = silence_s
+        self.start_s = start_s
+        self.preroll = int(preroll_s * 1000 / FRAME_MS)
+        self.max_s = max_s
+        self.min_s = min_s
+        self.barge_factor = barge_factor
+        self.barge_start_s = barge_start_s
+        self.floor_ratio = floor_ratio
+        self.floor = 0.0
+        self.recent: list[bytes] = []
+        self.loud_run = 0.0
+        self.active = False
+        self.pcm = bytearray()
+        self.quiet = 0.0
+        self.voiced = 0.0
+        self.length = 0.0
+
+    def level(self, speaking: bool) -> float:
+        bar = max(self.threshold, self.floor * self.floor_ratio)
+        return bar * (self.barge_factor if speaking else 1.0)
+
+    def feed(self, frame: bytes, speaking: bool = False):
+        """Returns None, "start" (speech began) or ("utterance", pcm_bytes)."""
+        dt = len(frame) / 2 / RATE
+        level = rms(frame)
+        loud = level >= self.level(speaking)
+        if not self.active:
+            if not loud:
+                # Track background noise only while nobody is talking.
+                self.floor = level if self.floor == 0 else 0.95 * self.floor + 0.05 * level
+            self.recent.append(frame)
+            if len(self.recent) > self.preroll + 20:
+                self.recent.pop(0)
+            self.loud_run = self.loud_run + dt if loud else 0.0
+            need = self.barge_start_s if speaking else self.start_s
+            if self.loud_run >= need:
+                self.active = True
+                keep = int(self.loud_run * 1000 / FRAME_MS) + self.preroll
+                self.pcm = bytearray(b"".join(self.recent[-keep:]))
+                self.length = len(self.pcm) / 2 / RATE
+                self.voiced = self.loud_run
+                self.quiet = 0.0
+                self.recent = []
+                return "start"
+            return None
+        self.pcm += frame
+        self.length += dt
+        if level >= self.level(False):
+            self.voiced += dt
+            self.quiet = 0.0
+        else:
+            self.quiet += dt
+        if self.quiet >= self.silence_s or self.length >= self.max_s:
+            self.active = False
+            self.loud_run = 0.0
+            pcm, self.pcm = bytes(self.pcm), bytearray()
+            if self.voiced < self.min_s:
+                return ("discard", pcm)
+            return ("utterance", pcm)
+        return None
+
+    def reset(self) -> None:
+        self.active = False
+        self.loud_run = 0.0
+        self.pcm = bytearray()
+        self.recent = []

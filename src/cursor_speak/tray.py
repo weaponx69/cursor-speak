@@ -112,6 +112,12 @@ def start_listen() -> None:
                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
+def start_converse(flag: str = "--toggle") -> None:
+    """Same as the conversation shortcut: start, or pause/resume; --stop ends it."""
+    subprocess.Popen(launcher.self_command() + ["converse", flag], start_new_session=True,
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
 class TrayApp:
     def __init__(self, ctl, force_window: bool = False, start_hidden: bool = False):
         self.ctl = ctl
@@ -169,6 +175,10 @@ class TrayApp:
         replay_item.connect("activate", lambda _w: self.ctl.replay())
         talk_item = Gtk.MenuItem(label="Talk to Cursor (start/stop)")
         talk_item.connect("activate", lambda _w: start_listen())
+        conv_item = Gtk.MenuItem(label="Conversation (start / pause)")
+        conv_item.connect("activate", lambda _w: start_converse())
+        conv_end = Gtk.MenuItem(label="End conversation")
+        conv_end.connect("activate", lambda _w: start_converse("--stop"))
         test_item = Gtk.MenuItem(label="Speak a test phrase")
         test_item.connect("activate", lambda _w: self.ctl.test())
         self.autostart_item = Gtk.CheckMenuItem(label="Start at login")
@@ -177,7 +187,7 @@ class TrayApp:
         quit_item = Gtk.MenuItem(label="Quit")
         quit_item.connect("activate", lambda _w: self._quit())
         for item in (
-            self.status_item, Gtk.SeparatorMenuItem(), self.show_item, talk_item, self.pause_item, stop_item,
+            self.status_item, Gtk.SeparatorMenuItem(), self.show_item, talk_item, conv_item, conv_end, self.pause_item, stop_item,
             replay_item, test_item, Gtk.SeparatorMenuItem(), self.autostart_item,
             Gtk.SeparatorMenuItem(), quit_item,
         ):
@@ -229,6 +239,10 @@ class TrayApp:
         self.win_talk = Gtk.Button(label="Talk")
         self.win_talk.connect("clicked", lambda _b: start_listen())
         v.pack_start(self.win_talk, False, False, 0)
+        conv = Gtk.Button(label="Start a conversation (hands-free)")
+        conv.set_tooltip_text("Talk to cursor-agent like a phone call; opens a conversation window")
+        conv.connect("clicked", lambda _b: start_converse())
+        v.pack_start(conv, False, False, 0)
         combo = Gtk.ComboBoxText()
         for mode, label in MODE_LABELS:
             combo.append(mode, label)
@@ -267,8 +281,14 @@ class TrayApp:
             sc = shortcut.status()
         except Exception:
             sc = None
-        lines.append(f"Shortcut: {accel_label(sc['binding'])}" if sc and sc.get("binding")
-                     else "Shortcut: none (run: cursor-speak shortcut install)")
+        lines.append(f"Push-to-talk: {accel_label(sc['binding'])}" if sc and sc.get("binding")
+                     else "Push-to-talk shortcut: none (run: cursor-speak shortcut install)")
+        try:
+            cs = shortcut.status(slot=shortcut.CONVERSE_SLOT)
+        except Exception:
+            cs = None
+        if cs and cs.get("binding"):
+            lines.append(f"Conversation on/off: {accel_label(cs['binding'])}")
         model = cfg.get("stt_model", "base.en")
         if stt.is_ready(model):
             lines.append(f"Speech model: {model} (local)")

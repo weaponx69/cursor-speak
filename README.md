@@ -19,12 +19,16 @@ leaving out code blocks, commands, file paths and tool output.
   [faster-whisper](https://github.com/SYSTRAN/faster-whisper); nothing is sent
   to a cloud speech service. Replies are still read out loud, so you get
   two-way voice.
+- **Conversation mode (hands-free):** talk to `cursor-agent` like a phone call.
+  The mic stays on, what you say goes straight into the same agent chat (no
+  typing or pasting, no ydotool, no sudo), you watch its progress in a window,
+  and its answer is read aloud. Talk over it to interrupt.
 
 ## Install (Ubuntu 24.04+ / Debian)
 
 ```sh
 ./build-deb.sh
-sudo apt install ./dist-deb/cursor-speak_0.1.5_all.deb
+sudo apt install ./dist-deb/cursor-speak_0.1.6_all.deb
 ```
 
 Then start **Cursor Speak** from the app menu (or run `cursor-speak`). A small
@@ -91,18 +95,20 @@ cursor-speak latest       show what would be read for the newest reply (no speec
 cursor-speak setup        download piper and the voice now
 cursor-speak autostart on|off|status
 cursor-speak listen [--toggle]   voice input, see below
-cursor-speak shortcut install    push-to-talk keyboard shortcut
+cursor-speak converse            hands-free conversation, see below
+cursor-speak shortcut install    keyboard shortcuts
 ```
 
 Log: `~/.local/state/cursor-speak/cursor-speak.log`.
 
 ## Voice input (talk to Cursor)
 
-1. Register the keyboard shortcut (GNOME; picks a key no other shortcut uses,
-   trying **Super+Alt+Space** first):
+1. Register the keyboard shortcuts (GNOME; picks keys no other shortcut uses,
+   trying **Super+Alt+Space** for push-to-talk and **Super+Alt+C** for
+   conversation mode first):
 
    ```sh
-   cursor-speak shortcut install          # or: --key '<Super><Control>space'
+   cursor-speak shortcut install          # both; --which listen|converse, --key '<Super><Control>space'
    cursor-speak shortcut status | remove
    ```
 
@@ -130,6 +136,80 @@ cursor-speak listen --mode type --enter
 cursor-speak listen --file x.wav --mode print   transcribe a file, print the text
 cursor-speak listen --check         what it will use, and what's missing
 cursor-speak setup-stt [--model small.en]
+```
+
+## Conversation mode (hands-free, like a phone call)
+
+```sh
+cursor-speak converse                      # in the folder you want the agent to work in
+cursor-speak converse --workspace ~/myapp  # or name the folder
+```
+
+or press **Super+Alt+C** (registered by `cursor-speak shortcut install`; the
+shortcut starts in your home folder unless `converse_workspace` is set, and the
+window lets you pick a folder). Pressing it again pauses or resumes listening;
+`cursor-speak converse --stop` (or **End**, or saying "goodbye") ends it.
+
+Then just talk. A pause of about a second ends what you said; it is
+transcribed on your computer and sent to `cursor-agent -p --resume <chat>
+--workspace <folder>`, so every turn continues the same chat (Cursor Speak
+remembers the chat per folder, so the next `converse` there picks it up again;
+`--new` starts fresh, `--resume <chat id>` picks one). The conversation window
+shows what you said, the agent's messages and each tool it runs (`$ npm test`,
+`read src/app.ts`), and has a box for typing too. When the agent finishes,
+its final answer is read aloud, without code blocks, commands or tool output.
+
+| say | does |
+| --- | --- |
+| *anything else* | sends it to the agent (queued if it's still working) |
+| "stop" / "cancel" | stops speaking and cancels the agent's current turn |
+| "pause listening" | ignores everything until you say "resume" |
+| "resume" | listens again |
+| "new conversation" | starts a new chat in the same folder |
+| "goodbye" | ends the conversation |
+
+Commands only count when they're the whole sentence, so "stop the dev server"
+still goes to the agent.
+
+States: a coloured dot in the window (listening, hearing you, thinking,
+speaking, paused) plus short quiet tones (rising: listening, a blip: sent to the
+agent, falling: paused). Notifications appear only for start, pause and end.
+Turn the tones off with `"converse_sounds": false`.
+
+**Wake word** (off by default; useful in a noisy room): `cursor-speak converse
+--wake-word "hey cursor"`, or `"converse_wake_word_enabled": true`. Then only
+sentences starting with the phrase are sent; for 15 seconds after a reply,
+follow-ups don't need it. "Stop" works without it while the agent is talking.
+
+**Interrupting (barge-in) and echo.** While a reply is being read, the mic
+needs a voice about 3x louder than usual (`converse_barge_factor`) to count,
+and anything it hears that's mostly the reply's own words is ignored. With a
+headset this works well. On laptop speakers the reply can still leak into the
+mic; then either:
+
+- `cursor-speak converse --echo-cancel` (or `"converse_echo_cancel": true`):
+  runs PipeWire's WebRTC echo canceller in a private `pipewire` process for the
+  length of the conversation (no root, nothing in your audio config changes);
+  replies play through it and the mic is recorded from it; or
+- `--barge-in command` (replies always finish; only voice commands like "stop"
+  act while it talks) or `--barge-in off`.
+
+**Agent permissions.** Turns run with `--trust` (a headless run can't answer the
+workspace-trust prompt; turn off with `"converse_trust": false`). Commands that
+need approval are not auto-approved unless you pass `--force` or set
+`"converse_force": true`. `--model` and `"converse_agent_args"` pass through.
+
+**Reading replies once.** The app's chat reader skips the chat a conversation
+owns (it reads it itself). An older Cursor Speak (0.1.4 or earlier) that's
+running gets paused for the conversation and resumed afterwards.
+
+```
+cursor-speak converse [--workspace DIR] [--resume CHAT_ID | --new]
+                      [--wake-word PHRASE | --no-wake-word]
+                      [--barge-in on|command|off] [--echo-cancel]
+                      [--force] [--model M] [--terminal]
+cursor-speak converse --toggle     pause/resume (or start)
+cursor-speak converse --stop       end
 ```
 
 ### Typing with ydotool (one-time, needs sudo)
@@ -184,6 +264,18 @@ Optional `~/.config/cursor-speak/config.json`:
 | `listen_silence_seconds` | `1.5` | pause that ends a recording |
 | `listen_max_seconds` | `60` | longest recording |
 | `listen_threshold` | `500` | mic level that counts as speech (raise it in a noisy room) |
+| `converse_workspace` | `""` | conversation folder; empty = where it was started |
+| `converse_wake_word_enabled` | `false` | require the wake word |
+| `converse_wake_word` | `hey cursor` | the wake phrase |
+| `converse_followup_seconds` | `15` | after a reply, follow-ups need no wake word |
+| `converse_barge_in` | `on` | talking over a reply: `on` interrupts, `command` only voice commands, `off` |
+| `converse_barge_factor` | `3.0` | how much louder you must be to interrupt |
+| `converse_silence_seconds` | `1.0` | pause that ends what you said |
+| `converse_threshold` | `500` | mic level that counts as speech (adapts upward to background noise) |
+| `converse_echo_cancel` | `false` | PipeWire echo cancellation (speakers) |
+| `converse_sounds` | `true` | state tones |
+| `converse_trust` / `converse_force` | `true` / `false` | `cursor-agent --trust` / `--force` |
+| `converse_model` | `""` | `cursor-agent --model` |
 
 ## How it works
 
@@ -201,6 +293,14 @@ Voice input: `listen.py` records 16 kHz mono with `pw-record` (or `parecord` /
 faster-whisper (int8 on the CPU) in its own venv, `~/.local/share/cursor-speak/stt-venv`;
 `deliver.py` opens the terminal or types; `shortcut.py` writes the GNOME custom
 shortcut with `gsettings`.
+
+Conversation mode: `converse.py` keeps `pw-record` running and segments speech
+with an adaptive energy detector (`recorder.Segmenter`, with pre-roll and a
+raised bar while speaking); a long-lived `stt_worker.py --serve` keeps the
+model loaded; `agent.py` runs one `cursor-agent -p --output-format stream-json`
+per turn and reads the final answer (the text after the last tool call);
+`converse_ui.py` is the window; `cues.py` makes the tones; `echo_cancel.py`
+is the optional PipeWire echo canceller.
 
 ## Remove
 
@@ -242,7 +342,7 @@ Bump `__version__` in `src/cursor_speak/__init__.py` and add a `<release>` entry
 `data/io.github.weaponx69.CursorSpeak.appdata.xml`, then:
 
 ```sh
-git tag v0.1.5 && git push origin v0.1.5
+git tag v0.1.6 && git push origin v0.1.6
 ```
 
 The `release` workflow builds the `.deb` and the AppImage and attaches them (plus

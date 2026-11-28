@@ -21,4 +21,5 @@ Description: Reads new Cursor CLI replies out loud
  Voice input: press a keyboard shortcut, talk, and your words go to a new
  cursor-agent session or are typed into the focused window (ydotool). Speech is
  recognised on your computer with faster-whisper (downloaded per user on first
- use, about 200 MB); no cloud speech service is used.
+ use, about 200 MB); no cloud speech service is used. Conversation mode keeps
+ the mic on and talks to cursor-agent hands-free, reading each answer aloud.

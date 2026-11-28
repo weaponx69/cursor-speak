@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import threading
 from pathlib import Path
 from typing import Callable
 
@@ -125,3 +126,54 @@ def transcribe(wav: Path | str, model: str, language: str = "en") -> str:
         raise RuntimeError((res.stderr or "transcription failed").strip().splitlines()[-1])
     line = res.stdout.strip().splitlines()[-1] if res.stdout.strip() else "{}"
     return (json.loads(line).get("text") or "").strip()
+
+
+class Transcriber:
+    """Keeps one faster-whisper model loaded for a whole conversation."""
+
+    def __init__(self, model: str, language: str = "en", cmd: list[str] | None = None):
+        self.model = model
+        self.language = language
+        self.cmd = cmd or [str(venv_python()), str(worker_path()), "--serve", str(model_dir(model)), language]
+        self.proc: subprocess.Popen | None = None
+        self.lock = threading.Lock()
+
+    def start(self) -> None:
+        if self.proc and self.proc.poll() is None:
+            return
+        self.proc = subprocess.Popen(
+            self.cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            text=True, bufsize=1, env=launcher.host_env(),
+        )
+        line = self.proc.stdout.readline()
+        if not line or not json.loads(line).get("ready"):
+            raise RuntimeError("speech recognizer did not start")
+
+    def transcribe(self, wav: Path | str) -> str:
+        with self.lock:
+            self.start()
+            self.proc.stdin.write(json.dumps({"wav": str(wav)}) + "\n")
+            self.proc.stdin.flush()
+            line = self.proc.stdout.readline()
+        if not line:
+            self.proc = None
+            raise RuntimeError("speech recognizer stopped")
+        out = json.loads(line)
+        if "error" in out:
+            raise RuntimeError(out["error"])
+        return (out.get("text") or "").strip()
+
+    def close(self) -> None:
+        p, self.proc = self.proc, None
+        if p and p.poll() is None:
+            try:
+                p.stdin.close()
+            except OSError:
+                pass
+            p.terminate()
+            try:
+                p.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                p.kill()
+        if p and p.stdout:
+            p.stdout.close()

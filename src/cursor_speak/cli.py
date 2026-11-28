@@ -171,20 +171,55 @@ def _setup_stt(args) -> int:
 def _shortcut(args) -> int:
     from . import launcher, shortcut
 
-    try:
-        if args.action == "install":
-            cmd = launcher.shortcut_command(args.command)
-            accel = shortcut.install(cmd, args.key)
-            print(f"Shortcut {accel} runs: {cmd}")
-        elif args.action == "remove":
-            print("Removed." if shortcut.remove() else "No Cursor Speak shortcut was set.")
-        else:
-            sc = shortcut.status()
-            print(f"{sc['binding']} -> {sc['command']}" if sc else "No Cursor Speak shortcut is set.")
-    except RuntimeError as e:
-        print(f"Shortcut: {e}", file=sys.stderr)
-        return 1
-    return 0
+    slots = {
+        "listen": (shortcut.SLOT, shortcut.NAME, shortcut.CANDIDATES, "push-to-talk"),
+        "converse": (shortcut.CONVERSE_SLOT, shortcut.CONVERSE_NAME, shortcut.CONVERSE_CANDIDATES, "conversation"),
+    }
+    which = ["listen", "converse"] if args.which == "both" else [args.which]
+    rc = 0
+    for w in which:
+        slot, name, cands, label = slots[w]
+        try:
+            if args.action == "install":
+                cmd = launcher.shortcut_command(args.command, w)
+                accel = shortcut.install(cmd, args.key if len(which) == 1 else None, slot=slot, name=name,
+                                         candidates=cands)
+                print(f"{label}: {accel} runs {cmd}")
+            elif args.action == "remove":
+                print(f"{label}: " + ("removed" if shortcut.remove(slot=slot) else "was not set"))
+            else:
+                sc = shortcut.status(slot=slot)
+                print(f"{label}: " + (f"{sc['binding']} -> {sc['command']}" if sc else "not set"))
+        except RuntimeError as e:
+            print(f"{label} shortcut: {e}", file=sys.stderr)
+            rc = 1
+    return rc
+
+
+def _converse(args) -> int:
+    import signal as _signal
+
+    from . import converse
+
+    if args.toggle and converse.signal_active(_signal.SIGUSR1):
+        print("Paused or resumed the conversation.")
+        return 0
+    if args.stop:
+        print("Ended the conversation." if converse.signal_active(_signal.SIGTERM) else "No conversation is running.")
+        return 0
+    if converse.active_pid():
+        print("A conversation is already running (use --toggle to pause/resume, --stop to end).")
+        return 0
+    _setup_logging(args.verbose)
+    from . import converse_ui
+
+    cfg = config.load_config()
+    for key, val in (("converse_barge_in", args.barge_in), ("converse_force", args.force or None),
+                     ("converse_model", args.model), ("converse_echo_cancel", args.echo_cancel or None)):
+        if val is not None:
+            cfg[key] = val
+    return converse_ui.run(cfg, workspace=args.workspace, resume=args.resume, new=args.new,
+                           wake_word=("" if args.no_wake_word else args.wake_word), terminal=args.terminal)
 
 
 def _autostart(args) -> int:
@@ -241,8 +276,24 @@ def build_parser() -> argparse.ArgumentParser:
     li.add_argument("-q", "--quiet", action="store_true", help="no desktop notifications")
     ss = sub.add_parser("setup-stt", help="download faster-whisper and the speech model now")
     ss.add_argument("--model", help="tiny.en, base.en, small.en, ... (default from config)")
-    sc = sub.add_parser("shortcut", help="GNOME keyboard shortcut for push-to-talk: install, remove or status")
+    cv = sub.add_parser("converse", help="hands-free voice conversation with cursor-agent")
+    cv.add_argument("--toggle", action="store_true", help="pause/resume a running conversation, or start one")
+    cv.add_argument("--stop", action="store_true", help="end a running conversation")
+    cv.add_argument("--workspace", help="folder the agent works in (default: config, else the current folder)")
+    cv.add_argument("--resume", metavar="CHAT_ID", help="continue this cursor-agent chat")
+    cv.add_argument("--new", action="store_true", help="start a new chat instead of continuing the last one here")
+    wk = cv.add_mutually_exclusive_group()
+    wk.add_argument("--wake-word", metavar="PHRASE", help='require a wake phrase, e.g. "hey cursor"')
+    wk.add_argument("--no-wake-word", action="store_true", help="no wake phrase even if the config has one")
+    cv.add_argument("--barge-in", choices=["on", "command", "off"], help="what talking over a reply does")
+    cv.add_argument("--echo-cancel", action="store_true", help="use PipeWire echo cancellation (speakers)")
+    cv.add_argument("--force", action="store_true", help="let the agent run commands without asking (cursor-agent --force)")
+    cv.add_argument("--model", help="cursor-agent model")
+    cv.add_argument("--terminal", action="store_true", help="no window; print the conversation here")
+    cv.add_argument("-v", "--verbose", action="store_true")
+    sc = sub.add_parser("shortcut", help="GNOME keyboard shortcuts (push-to-talk and conversation): install, remove or status")
     sc.add_argument("action", choices=["install", "remove", "status"], nargs="?", default="status")
+    sc.add_argument("--which", choices=["listen", "converse", "both"], default="both")
     sc.add_argument("--key", help="e.g. '<Super><Alt>space' (default: first free of a few)")
     sc.add_argument("--command", help="launcher to run (default: this copy of cursor-speak)")
     a = sub.add_parser("autostart", help="start at login: on, off, or status")
@@ -271,4 +322,6 @@ def main(argv: list[str] | None = None) -> int:
         return _setup_stt(args)
     if cmd == "shortcut":
         return _shortcut(args)
+    if cmd == "converse":
+        return _converse(args)
     return 2

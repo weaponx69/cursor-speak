@@ -21,6 +21,7 @@
       <li>Never speaks old replies when it starts</li>
       <li>Opens chat files read-only and never touches the Cursor process</li>
       <li>Local neural voice (piper), downloaded on first run, with espeak-ng as a fallback</li>
+      <li>Hands-free conversation mode: talk to cursor-agent like a phone call, with replies read aloud and interruptible</li>
       <li>Push-to-talk voice input: speak to start a new cursor-agent session or type into a running one, recognised locally with faster-whisper</li>
     </ul>
   </description>
@@ -43,6 +44,18 @@
   </keywords>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.1.6" date="2026-11-28">
+      <description>
+        <p>
+          Adds conversation mode: the mic stays on, what you say goes straight
+          into the same cursor-agent chat, a window shows the agent's progress,
+          and its answer is read aloud. Talk over a reply to interrupt it, say
+          "stop", "pause listening", "resume", "new conversation" or
+          "goodbye", and use an optional wake word. No typing tools or root
+          access are needed.
+        </p>
+      </description>
+    </release>
     <release version="0.1.5" date="2026-11-28">
       <description>
         <p>
